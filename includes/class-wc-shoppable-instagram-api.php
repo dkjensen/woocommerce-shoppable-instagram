@@ -9,14 +9,14 @@ class WC_Shoppable_Instagram_API {
 
 	private $token      = '';
 
-	const API = 'https://api.instagram.com/v1/';
+	const API = 'https://api.instagram.com/v1';
 
 	public function __construct( $token = '' ) {
 		$this->token = $token;
 	}
 
-	public function get_media( $user = 'self' ) {
-		$response = $this->request( 'users/' . $user . '/media/recent/' );
+	public function get_media( $user = 'self', $count = 10 ) {
+		$response = $this->request( '/users/' . $user . '/media/recent/',  array( 'count' => absint( $count ) ) );
 
 		if( is_wp_error( $response ) ) {
 			$this->log_error( $response->get_error_message() );
@@ -29,30 +29,32 @@ class WC_Shoppable_Instagram_API {
 		return $media;
 	}
 
-	public function pagination( $obj, $limit = 0 ) {
+	public function pagination( $obj ) {
         if( is_object( $obj ) && ! is_null( $obj->pagination ) ) {
             if( ! isset( $obj->pagination->next_url ) ) {
                 return;
             }
 
-            $apiCall = explode( '?', $obj->pagination->next_url );
+            $request = parse_url( $obj->pagination->next_url );
 
-            if( count( $apiCall ) < 2 ) {
-                return;
-            }
+            $response = $this->request( str_replace( '/v1', '', $request['path'] ), array( 'max_id' => $obj->pagination->next_max_id, 'count' => 10 ) );
 
-            $function = str_replace( self::API_URL, '', $apiCall[0] );
+            if( is_wp_error( $response ) ) {
+				$this->log_error( $response->get_error_message() );
 
-            $auth = (strpos($apiCall[1], 'access_token') !== false);
+				return false;
+			}
 
-            if (isset($obj->pagination->next_max_id)) {
-                return $this->_makeCall($function, $auth, array('max_id' => $obj->pagination->next_max_id, 'count' => $limit));
-            }
+			$media = json_decode( wp_remote_retrieve_body( $response ) );
 
-            return $this->_makeCall($function, $auth, array('cursor' => $obj->pagination->next_cursor, 'count' => $limit));
+			if( ! isset( $media->data ) || empty( $media->data ) ) {
+				$this->log_error( __( 'Unable to load media using pagination method', 'wcsi' ) );
+			}
+			
+			return $media;
         }
-        
-        throw new InstagramException("Error: pagination() | This method doesn't support pagination.");
+
+        return false;
     }
 
 	public function log_error( $error = '' ) {
@@ -67,8 +69,14 @@ class WC_Shoppable_Instagram_API {
 		return (bool) $this->has_errors;
 	}
 
-	public function request( $endpoint = '' ) {
-		$request_uri = add_query_arg( array( 'access_token' => $this->token ), self::API . $endpoint );
+	public function request( $endpoint = '', $args = array() ) {
+		if( ! is_array( $args ) ) {
+			$args = array();
+		}
+
+		$args = array_merge( $args, array( 'access_token' => $this->token ) );
+
+		$request_uri = add_query_arg( $args, self::API . $endpoint );
 
 		return wp_remote_get( $request_uri );
 	}
