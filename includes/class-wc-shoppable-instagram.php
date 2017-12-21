@@ -101,28 +101,32 @@ class WC_Shoppable_Instagram {
 
 			$result = array();
 
-			do {
-				if( ! empty( $media->data ) ) {
-					foreach( $media->data as $entry ) {
-						if( $entry->type == 'image' ) {
-							$result[] = $entry;
+			$initial_media_count = count( $media->data );
 
-							if( sizeof( $result ) >= $num )
-								break 2;
+			if( ! empty( $media->data ) ) {
+				do {
+					if( ! empty( $media->data ) ) {
+						foreach( $media->data as $entry ) {
+							if( $entry->type == 'image' ) {
+								$result[] = $entry;
+
+								if( sizeof( $result ) >= $num )
+									break 2;
+							}
 						}
 					}
-				}
 
-				$media = $instagram->pagination( $media );
+					$media = $instagram->pagination( $media );
 
 
-				if( $instagram->has_errors() ) {
-					return $result;
-				}
+					if( $instagram->has_errors() ) {
+						return $result;
+					}
 
-			}while( count( $result ) <= $num );
+				}while( count( $result ) <= $num && count( $initial_media_count ) > $num );
 
-			$this->setCache( $result );
+				$this->setCache( $result );
+			}
 
 			return $result;
 		}
